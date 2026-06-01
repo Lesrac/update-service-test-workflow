@@ -37,12 +37,6 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      # First, do the standard build and publish (same as build-and-publish job)
-      - name: Build and publish with Gradle Wrapper
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./gradlew clean build publishVersion
-
       # Detect which components have changed since last release
       - name: Detect changed components
         id: detect-changes
