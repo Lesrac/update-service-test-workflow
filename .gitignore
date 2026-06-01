@@ -1,0 +1,6 @@
+.idea/*
+publish/
+bin/
+build/
+obj/
+*.gradle

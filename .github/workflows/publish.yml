@@ -1,0 +1,103 @@
+name: Publish release
+
+on:
+  push:
+    branches:
+      - develop
+  pull_request:
+    types: [closed]
+    branches:
+      - develop
+  release:
+    types: [created]
+
+jobs:
+  release-artifacts:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    permissions:
+      contents: write   # Required to upload artifacts to GitHub releases
+      packages: write   # Required to publish to GitHub Packages
+
+    steps:
+      - name: Checkout latest code
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: 21
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      # First, do the standard build and publish (same as build-and-publish job)
+      - name: Build and publish with Gradle Wrapper
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./gradlew clean build publishVersion
+
+      # Detect which components have changed since last release
+      - name: Detect changed components
+        id: detect-changes
+        run: |
+          echo "Detecting changes since last release..."
+          
+          # Get the previous release tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          
+          if [ -z "$PREV_TAG" ]; then
+            echo "No previous release found, building all components"
+            echo "updateservice_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "Previous release: $PREV_TAG"
+            
+            # Check if updateservice files changed
+            if git diff --name-only $PREV_TAG HEAD | grep -q -E '\.cs$|\.csproj$|appsettings\.json$'; then
+              echo "UpdateService files changed"
+              echo "updateservice_changed=true" >> $GITHUB_OUTPUT
+            else
+              echo "No updateservice changes"
+              echo "updateservice_changed=false" >> $GITHUB_OUTPUT
+            fi
+            
+          fi
+
+      # Then, build Windows Server release artifacts
+      - name: Build Windows Server release artifacts
+        run: |
+          echo "Building release artifacts for Windows Server..."
+          
+          # Get version from gradle
+          VERSION=$(./gradlew -q properties | grep "^version:" | awk '{print $2}')
+          echo "Version: $VERSION"
+          
+          mkdir -p release-artifacts
+          
+          # Build update service - only if changed
+          if [ "${{ steps.detect-changes.outputs.updateservice_changed }}" = "true" ]; then
+            echo "Building update service (changes detected)..."
+            ./gradlew buildUpdateService
+            cd publish
+            zip -r ../../release-artifacts/curaLINEClient-updateservice-${VERSION}.zip ./*
+            cd ../..
+          else
+            echo "Skipping update service build (no changes)"
+          fi
+          
+          echo "Release artifacts created:"
+          ls -lh release-artifacts/
+
+      - name: Upload update service artifact
+        if: steps.detect-changes.outputs.updateservice_changed == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-artifacts/curaLINEClient-updateservice-*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
