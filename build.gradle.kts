@@ -2,7 +2,7 @@ import org.gradle.kotlin.dsl.withType
 import org.gradle.api.GradleException
 
 allprojects {
-    version = "1.0.2"
+    version = "1.0.4"
 }
 
 // =============================================================================
