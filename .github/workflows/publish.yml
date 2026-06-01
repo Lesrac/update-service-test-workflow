@@ -79,7 +79,7 @@ jobs:
             echo "Building update service (changes detected)..."
             ./gradlew buildUpdateService
             cd publish
-            zip -r release-artifacts/updateservice-${VERSION}.zip ./*
+            zip -r ../release-artifacts/updateservice-${VERSION}.zip ./*
             cd ..
           else
             echo "Skipping update service build (no changes)"
